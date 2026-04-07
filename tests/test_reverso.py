@@ -20,7 +20,7 @@ def _mock_get(fixture_file, status=200):
 class TestBonjour:
     @pytest.fixture(autouse=True)
     def mock_request(self):
-        with patch("define_cli.reverso.requests.get",
+        with patch("define_cli.reverso.cf_requests.get",
                    return_value=_mock_get("reverso_bonjour.html")):
             self.result_default = reverso.fetch("bonjour", "fr", limit=5)
             self.result_all = reverso.fetch("bonjour", "fr", limit=None)
@@ -30,19 +30,19 @@ class TestBonjour:
         assert isinstance(self.result_default, list)
 
     def test_default_limit_respected(self):
-        with patch("define_cli.reverso.requests.get",
+        with patch("define_cli.reverso.cf_requests.get",
                    return_value=_mock_get("reverso_bonjour.html")):
             result = reverso.fetch("bonjour", "fr", limit=5)
         assert len(result) == 5
 
     def test_no_limit_returns_all(self):
-        with patch("define_cli.reverso.requests.get",
+        with patch("define_cli.reverso.cf_requests.get",
                    return_value=_mock_get("reverso_bonjour.html")):
             result = reverso.fetch("bonjour", "fr", limit=None)
         assert len(result) == 6  # fixture has 6 examples
 
     def test_limit_of_one(self):
-        with patch("define_cli.reverso.requests.get",
+        with patch("define_cli.reverso.cf_requests.get",
                    return_value=_mock_get("reverso_bonjour.html")):
             result = reverso.fetch("bonjour", "fr", limit=1)
         assert len(result) == 1
@@ -78,13 +78,13 @@ class TestBonjour:
 
 class TestMissing:
     def test_returns_none_when_no_examples(self):
-        with patch("define_cli.reverso.requests.get",
+        with patch("define_cli.reverso.cf_requests.get",
                    return_value=_mock_get("reverso_missing.html")):
             result = reverso.fetch("zzznonsense", "fr")
         assert result is None
 
     def test_returns_none_on_http_error(self):
-        with patch("define_cli.reverso.requests.get",
+        with patch("define_cli.reverso.cf_requests.get",
                    return_value=_mock_get("reverso_missing.html", status=404)):
             result = reverso.fetch("zzznonsense", "fr")
         assert result is None

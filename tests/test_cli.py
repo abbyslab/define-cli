@@ -41,12 +41,14 @@ class TestParser:
         assert args.word == "ingewikkeld"
 
     def test_missing_word_raises(self):
-        with pytest.raises(SystemExit):
-            self.parser.parse_args(["fr"])
+        with patch("sys.argv", ["define", "fr"]):
+            with pytest.raises(SystemExit):
+                main()
 
     def test_missing_lang_raises(self):
-        with pytest.raises(SystemExit):
-            self.parser.parse_args([])
+        with patch("sys.argv", ["define"]):
+            with pytest.raises(SystemExit):
+                main()
 
     def test_flags_can_combine(self):
         args = self.parser.parse_args(["fr", "bonjour", "--no-wikt", "--no-reverso"])

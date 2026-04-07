@@ -97,6 +97,10 @@ def main() -> None:
             console.print(f"  [dim]{code}[/dim]  {name}")
         return
 
+    if not args.lang or not args.word:
+        parser.print_help()
+        sys.exit(1)
+
     lang = args.lang.lower()
     word = args.word
 
@@ -106,10 +110,6 @@ def main() -> None:
             f"Supported: {', '.join(SUPPORTED_LANGS)}",
             file=sys.stderr,
         )
-        sys.exit(1)
-
-    if not args.lang or not args.word:
-        parser.print_help()
         sys.exit(1)
 
     examples_limit = None if args.examples else DEFAULT_EXAMPLE_COUNT
