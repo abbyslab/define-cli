@@ -49,12 +49,19 @@ POS_TAGS = {
     "Determiner", "Numeral", "Particle", "Suffix", "Prefix",
 }
 
-
 def _heading_id(tag: Tag) -> str | None:
-    """Get normalised heading id (strips _2, _3 suffixes)."""
+    """Extract normalised heading id from any known Wiktionary heading structure."""
+    # 1. id directly on tag (new style bare h2/h3)
     tag_id = tag.get("id", "")
     if tag_id:
         return re.sub(r"_\d+$", "", tag_id)
+    # 2. id on inner h2/h3/h4 (new style div.mw-heading wrapping)
+    inner = tag.find(["h2", "h3", "h4"])
+    if inner:
+        inner_id = inner.get("id", "")
+        if inner_id:
+            return re.sub(r"_\d+$", "", inner_id)
+    # 3. old style mw-headline span
     span = tag.find("span", class_="mw-headline")
     if span:
         return span.get_text(strip=True)
@@ -62,11 +69,15 @@ def _heading_id(tag: Tag) -> str | None:
 
 
 def _is_lang_heading(tag: Tag) -> bool:
-    return (
-        tag.name == "div"
-        and "mw-heading2" in tag.get("class", [])
-    ) or tag.name == "h2"
-
+    """True if tag marks the start of a new language section."""
+    # New style: div.mw-heading2
+    if tag.name == "div" and "mw-heading2" in tag.get("class", []):
+        return True
+    # Old style: bare h2 with an id that looks like a language name
+    # (exclude structural h2s like "Contents" which have no id)
+    if tag.name == "h2":
+        return bool(tag.get("id"))
+    return False
 
 def fetch(word: str, lang: str) -> dict | None:
     lang_name = LANG_SECTION_NAMES.get(lang)
@@ -85,8 +96,7 @@ def fetch(word: str, lang: str) -> dict | None:
     for tag in soup.find_all(["h2", "div"]):
         if tag.name == "div" and "mw-heading2" not in tag.get("class", []):
             continue
-        h2 = tag.find("h2") if tag.name == "div" else tag
-        if h2 and _heading_id(h2) == lang_name:
+        if _heading_id(tag) == lang_name:
             lang_container = tag
             break
 
