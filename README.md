@@ -14,6 +14,7 @@ define nl ingewikkeld
 define fr bonjour -e       # full examples dump
 define fr bonjour --no-reverso   # definitions only
 define fr bonjour --no-wikt      # examples only
+define --langs              # list all supported languages and their codes
 ```
 
 ## Supported languages
@@ -59,6 +60,8 @@ define fr bonjour --no-wikt      # examples only
 git clone git@github.com:abbyslab/define-cli
 cd define-cli
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+.venv/bin/pip install -e .
+.venv/bin/pip install pytest
+make test       # unit tests (no network)
+make live       # live tests against real sites (network required)
 ```
