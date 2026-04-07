@@ -49,6 +49,34 @@ POS_TAGS = {
     "Determiner", "Numeral", "Particle", "Suffix", "Prefix",
 }
 
+NATIVE_WIKT_LANGS = {
+    "ar": "ar", "ca": "ca", "zh": "zh", "cs": "cs", "da": "da",
+    "nl": "nl", "fr": "fr", "de": "de", "el": "el", "he": "he",
+    "hi": "hi", "hu": "hu", "it": "it", "ja": "ja", "ko": "ko",
+    "fa": "fa", "pl": "pl", "pt": "pt", "ro": "ro", "ru": "ru",
+    "sk": "sk", "es": "es", "sv": "sv", "th": "th", "tr": "tr",
+    "uk": "uk", "vi": "vi",
+}
+
+
+def _fetch_ipa_native(word: str, lang: str) -> list[str]:
+    """Try fetching IPA from the native-language Wiktionary."""
+    url = f"https://{lang}.wiktionary.org/wiki/{requests.utils.quote(word)}"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        if resp.status_code != 200:
+            return []
+    except Exception:
+        return []
+
+    soup = BeautifulSoup(resp.text, "lxml")
+    ipa_list: list[str] = []
+    for span in soup.find_all("span", class_="IPA"):
+        text = span.get_text(strip=True)
+        if text and text not in ipa_list:
+            ipa_list.append(text)
+    return ipa_list
+
 def _heading_id(tag: Tag) -> str | None:
     """Extract normalised heading id from any known Wiktionary heading structure."""
     # 1. id directly on tag (new style bare h2/h3)
@@ -119,6 +147,11 @@ def fetch(word: str, lang: str) -> dict | None:
             if text and text not in ipa_list:
                 ipa_list.append(text)
 
+
+	# IPA fallback: try native-language Wiktionary if EN gave nothing
+    if not ipa_list and lang in NATIVE_WIKT_LANGS:
+        ipa_list = _fetch_ipa_native(word, lang)
+
     # --- POS + definitions ---
     entries: list[dict] = []
     current_pos: str | None = None
@@ -166,3 +199,4 @@ def fetch(word: str, lang: str) -> dict | None:
         return None
 
     return {"ipa": ipa_list, "entries": entries}
+
