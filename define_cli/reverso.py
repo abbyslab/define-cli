@@ -97,7 +97,10 @@ def _fetch_reverso(word: str, lang: str, limit: int | None) -> list[dict] | None
         src_text = _clean(src_el.get_text(separator=" ", strip=True))
         trg_text = _clean(trg_el.get_text(separator=" ", strip=True))
         if src_text and trg_text:
-            examples.append({"source": src_text, "translation": trg_text})
+            # Only include if the word actually appears in the source
+            if word.lower() in src_text.lower():
+                examples.append({"source": src_text, "translation": trg_text})
+
         if limit is not None and len(examples) >= limit:
             break
 
@@ -150,7 +153,8 @@ def _fetch_tatoeba(word: str, lang: str, limit: int | None) -> list[dict] | None
                 break
 
         if src_text and trg_text:
-            examples.append({"source": src_text, "translation": trg_text})
+            if word.lower() in src_text.lower():
+                examples.append({"source": src_text, "translation": trg_text})
 
         if limit is not None and len(examples) >= limit:
             break
