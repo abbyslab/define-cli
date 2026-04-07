@@ -66,9 +66,17 @@ pipx reinstall define-cli
 ```bash
 git clone git@github.com:abbyslab/define-cli
 cd define-cli
-python3 -m venv .venv
-.venv/bin/pip install -e .
-.venv/bin/pip install pytest
-make test       # unit tests (no network)
-make live       # live tests against real sites (network required)
+make setup
+```
+
+Run the tool locally:
+```bash
+./define fr bonjour
+./define --langs
+```
+
+Run tests:
+```bash
+make test		# unit tests (no network)
+make live 		# live tests against real sites (network required)
 ```
