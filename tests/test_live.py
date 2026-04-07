@@ -6,6 +6,7 @@ Network required.
 
 from __future__ import annotations
 from define_cli import wiktionary, reverso
+import sys
 
 SEP = "─" * 60
 
@@ -109,3 +110,5 @@ for lang, r in results.items():
     v = "PASS" if r["reverso"] else "FAIL"
     print(f"{lang:<6}  {w:<12}  {v}")
 print()
+if total_fail > 0:
+	sys.exit(1)
