@@ -132,3 +132,33 @@ class TestLangMismatch:
                    return_value=_mock_get("wikt_ingewikkeld.html")):
             result = wiktionary.fetch("ingewikkeld", "fr")
         assert result is None
+
+class TestNativeFallback:
+    def test_dutch_inflected_form_gets_ipa(self):
+        """loopt has no IPA on EN Wiktionary, so native nl.wiktionary fallback must fire."""
+        from unittest.mock import patch, MagicMock
+        from bs4 import BeautifulSoup
+
+        # EN Wiktionary page with Dutch section but no IPA span
+        en_html = """<html><body>
+            <div class="mw-heading mw-heading2"><h2 id="Dutch">Dutch</h2></div>
+            <div class="mw-heading mw-heading3"><h3 id="Verb">Verb</h3></div>
+            <ol><li>inflection of lopen</li></ol>
+        </body></html>"""
+
+        # Native nl.wiktionary page with IPA
+        nl_html = """<html><body>
+            <span class="IPAtekst">/lopt/</span>
+        </body></html>"""
+
+        def mock_get(url, **kwargs):
+            r = MagicMock()
+            r.status_code = 200
+            r.text = nl_html if "nl.wiktionary" in url else en_html
+            return r
+
+        with patch("define_cli.wiktionary.requests.get", side_effect=mock_get):
+            result = wiktionary.fetch("loopt", "nl")
+
+        assert result is not None
+        assert result["ipa"] == ["/lopt/"]

@@ -111,9 +111,20 @@ def _fetch_soup(word: str) -> BeautifulSoup | None:
     except Exception:
         return None
 
+def _looks_like_ipa(text: str) -> bool:
+    t = text.strip()
+    # Has stress marks — accept regardless
+    if re.search(r'[ˈˌ]', t):
+        return True
+    # Has /.../ or [...] delimiters — accept if not obviously a non-IPA label
+    if re.search(r'^[/\[\\]', t) or re.search(r'[/\]\\]$', t):
+        # Reject known placeholder patterns
+        if re.search(r'Prononciation|Pronunciation|\?', t):
+            return False
+        return True
+    return False
 
 def _fetch_ipa_native(word: str, lang: str) -> list[str]:
-    """Try fetching IPA from the native-language Wiktionary."""
     url = f"https://{lang}.wiktionary.org/wiki/{requests.utils.quote(word)}"
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
@@ -124,12 +135,68 @@ def _fetch_ipa_native(word: str, lang: str) -> list[str]:
 
     soup = BeautifulSoup(resp.text, "lxml")
     ipa_list: list[str] = []
-    for span in soup.find_all("span", class_="IPA"):
-        text = span.get_text(strip=True)
-        if text and text not in ipa_list:
-            ipa_list.append(text)
-    return ipa_list
 
+    # Standard span-based IPA
+    for span in soup.find_all("span", class_=["IPA", "ipa", "IPAtekst", "API", "audio-ipa"]):
+        text = span.get_text(strip=True)
+        if text and text not in ipa_list and _looks_like_ipa(text):
+            ipa_list.append(text)
+
+    # Font-tag based IPA (Ukrainian)
+    if not ipa_list:
+        for font in soup.find_all("font"):
+            text = font.get_text(strip=True)
+            if text and text not in ipa_list and _looks_like_ipa(text):
+                ipa_list.append(text)
+
+    # Spanish: IPA in td inside pron-graf tables
+    if not ipa_list and lang == "es":
+        for table in soup.find_all("table", class_="pron-graf"):
+            for td in table.find_all("td"):
+                text = td.get_text(strip=True)
+                if _looks_like_ipa(text):
+                    # extract just the IPA part
+                    match = re.search(r'[/\[]([\w\s\u02b0-\u036f\u0250-\u02af]+)[/\]]', text)
+                    if match:
+                        candidate = f"/{match.group(1)}/" if "/" in text else f"[{match.group(1)}]"
+                        if candidate not in ipa_list:
+                            ipa_list.append(candidate)
+                            break
+            if ipa_list:
+                break
+
+    # Greek: IPA in dd tags containing ΔΦΑ:
+    if not ipa_list and lang == "el":
+        for dd in soup.find_all("dd"):
+            text = dd.get_text(strip=True)
+            if "ΔΦΑ" in text and _looks_like_ipa(text):
+                match = re.search(r'[/\[]([^/\]]+)[/\]]', text)
+                if match:
+                    ipa_list.append(f"/{match.group(1)}/")
+                    break
+
+    # Persian: IPA in section text as /word/
+    if not ipa_list and lang == "fa":
+        for section in soup.find_all("section"):
+            text = section.get_text(strip=True)
+            match = re.search(r'/([^/]+)/', text)
+            if match and _looks_like_ipa(f"/{match.group(1)}/"):
+                ipa_list.append(f"/{match.group(1)}/")
+                break
+
+    # Romanian: IPA in span inside section with AFI:
+    if not ipa_list and lang == "ro":
+        for section in soup.find_all("section"):
+            text = section.get_text(strip=True)
+            if "AFI" in text:
+                match = re.search(r"[/'\u02c8]([^/'\u02c8\s]+)", text)
+                if match:
+                    full = re.search(r"/[^/]+/|'\S+'", text)
+                    if full:
+                        ipa_list.append(full.group(0))
+                        break
+
+    return ipa_list
 
 def fetch(word: str, lang: str) -> dict | None:
     lang_name = LANG_SECTION_NAMES.get(lang)
@@ -175,7 +242,7 @@ def fetch(word: str, lang: str) -> dict | None:
     for node in section_nodes:
         for span in node.find_all("span", class_="IPA"):
             text = span.get_text(strip=True)
-            if text and text not in ipa_list:
+            if text and text not in ipa_list and _looks_like_ipa(text):
                 ipa_list.append(text)
 
     # IPA fallback: try native-language Wiktionary if EN gave nothing

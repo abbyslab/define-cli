@@ -110,5 +110,6 @@ for lang, r in results.items():
     v = "PASS" if r["reverso"] else "FAIL"
     print(f"{lang:<6}  {w:<12}  {v}")
 print()
-if total_fail > 0:
-	sys.exit(1)
+
+if __name__ == "__main__":
+    sys.exit(1 if total_fail > 0 else 0)
