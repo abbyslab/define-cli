@@ -49,6 +49,12 @@ def render(
     console.print()
     console.print(header)
 
+    if wikt_data and wikt_data.get("actual_word") and wikt_data["actual_word"] != word:
+        console.print(
+            f"  [dim]No results for '{word}', showing results"
+            f" for '{wikt_data['actual_word']}'[/dim]"
+        )
+
     # ── Definitions ─────────────────────────────────────────────────────────
     if wikt_data and wikt_data.get("entries"):
         for entry in wikt_data["entries"]:

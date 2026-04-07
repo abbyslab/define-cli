@@ -58,24 +58,11 @@ NATIVE_WIKT_LANGS = {
     "uk": "uk", "vi": "vi",
 }
 
+LATIN_SCRIPT_LANGS = {
+    "fr", "nl", "de", "es", "it", "pt", "ca", "cs", "da",
+    "hu", "pl", "ro", "sk", "sv", "tr", "vi",
+}
 
-def _fetch_ipa_native(word: str, lang: str) -> list[str]:
-    """Try fetching IPA from the native-language Wiktionary."""
-    url = f"https://{lang}.wiktionary.org/wiki/{requests.utils.quote(word)}"
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=10)
-        if resp.status_code != 200:
-            return []
-    except Exception:
-        return []
-
-    soup = BeautifulSoup(resp.text, "lxml")
-    ipa_list: list[str] = []
-    for span in soup.find_all("span", class_="IPA"):
-        text = span.get_text(strip=True)
-        if text and text not in ipa_list:
-            ipa_list.append(text)
-    return ipa_list
 
 def _heading_id(tag: Tag) -> str | None:
     """Extract normalised heading id from any known Wiktionary heading structure."""
@@ -98,37 +85,81 @@ def _heading_id(tag: Tag) -> str | None:
 
 def _is_lang_heading(tag: Tag) -> bool:
     """True if tag marks the start of a new language section."""
-    # New style: div.mw-heading2
     if tag.name == "div" and "mw-heading2" in tag.get("class", []):
         return True
-    # Old style: bare h2 with an id that looks like a language name
-    # (exclude structural h2s like "Contents" which have no id)
     if tag.name == "h2":
         return bool(tag.get("id"))
     return False
+
+
+def _find_lang_container(soup: BeautifulSoup, lang_name: str) -> Tag | None:
+    for tag in soup.find_all(["h2", "div"]):
+        if tag.name == "div" and "mw-heading2" not in tag.get("class", []):
+            continue
+        if _heading_id(tag) == lang_name:
+            return tag
+    return None
+
+
+def _fetch_soup(word: str) -> BeautifulSoup | None:
+    url = f"https://en.wiktionary.org/wiki/{requests.utils.quote(word)}"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        if resp.status_code != 200:
+            return None
+        return BeautifulSoup(resp.text, "lxml")
+    except Exception:
+        return None
+
+
+def _fetch_ipa_native(word: str, lang: str) -> list[str]:
+    """Try fetching IPA from the native-language Wiktionary."""
+    url = f"https://{lang}.wiktionary.org/wiki/{requests.utils.quote(word)}"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        if resp.status_code != 200:
+            return []
+    except Exception:
+        return []
+
+    soup = BeautifulSoup(resp.text, "lxml")
+    ipa_list: list[str] = []
+    for span in soup.find_all("span", class_="IPA"):
+        text = span.get_text(strip=True)
+        if text and text not in ipa_list:
+            ipa_list.append(text)
+    return ipa_list
+
 
 def fetch(word: str, lang: str) -> dict | None:
     lang_name = LANG_SECTION_NAMES.get(lang)
     if not lang_name:
         return None
 
-    url = f"https://en.wiktionary.org/wiki/{requests.utils.quote(word)}"
-    resp = requests.get(url, headers=HEADERS, timeout=10)
-    if resp.status_code != 200:
-        return None
+    # Build list of word variants to try, in order
+    variants = [word]
+    if lang in LATIN_SCRIPT_LANGS:
+        lower = word.lower()
+        title = word.lower().title()
+        if lower != word:
+            variants.append(lower)
+        if title not in variants:
+            variants.append(title)
 
-    soup = BeautifulSoup(resp.text, "lxml")
-
-    # Find the language section — either a div.mw-heading2 or bare h2
+    soup = None
+    actual_word = word
     lang_container = None
-    for tag in soup.find_all(["h2", "div"]):
-        if tag.name == "div" and "mw-heading2" not in tag.get("class", []):
+
+    for variant in variants:
+        soup = _fetch_soup(variant)
+        if soup is None:
             continue
-        if _heading_id(tag) == lang_name:
-            lang_container = tag
+        lang_container = _find_lang_container(soup, lang_name)
+        if lang_container is not None:
+            actual_word = variant
             break
 
-    if not lang_container:
+    if lang_container is None or soup is None:
         return None
 
     # Collect siblings until the next language-level heading
@@ -147,17 +178,15 @@ def fetch(word: str, lang: str) -> dict | None:
             if text and text not in ipa_list:
                 ipa_list.append(text)
 
-
-	# IPA fallback: try native-language Wiktionary if EN gave nothing
+    # IPA fallback: try native-language Wiktionary if EN gave nothing
     if not ipa_list and lang in NATIVE_WIKT_LANGS:
-        ipa_list = _fetch_ipa_native(word, lang)
+        ipa_list = _fetch_ipa_native(actual_word, lang)
 
     # --- POS + definitions ---
     entries: list[dict] = []
     current_pos: str | None = None
 
     for node in section_nodes:
-        # POS headings are in div.mw-heading3 or bare h3
         if node.name in ("h3", "h4"):
             heading = _heading_id(node)
             if heading in POS_TAGS:
@@ -176,7 +205,6 @@ def fetch(word: str, lang: str) -> dict | None:
             for li in node.find_all("li", recursive=False):
                 for sub in li.find_all(["dl", "ul"]):
                     sub.decompose()
-                # strip date/era spans e.g. [918–???]
                 for span in li.find_all("span", class_=["qualifier-brac", "ib-brac", "ib-content"]):
                     span.decompose()
                 text = li.get_text(separator=" ", strip=True)
@@ -184,7 +212,6 @@ def fetch(word: str, lang: str) -> dict | None:
                 text = re.sub(r"\( ", "(", text)
                 text = re.sub(r" \)", ")", text)
                 text = re.sub(r" ([,;])", r"\1", text)
-                # strip residual bracket spans like [918–???]
                 text = re.sub(r"\s*\[\d+[–\-][^\]]*\]\s*", " ", text)
                 text = text.strip()
                 if text:
@@ -195,5 +222,4 @@ def fetch(word: str, lang: str) -> dict | None:
                 else:
                     entries.append({"pos": current_pos, "definitions": defs})
 
-    return {"ipa": ipa_list, "entries": entries}
-
+    return {"ipa": ipa_list, "entries": entries, "actual_word": actual_word}
