@@ -17,6 +17,13 @@ define fr bonjour --no-wikt      # examples only
 define --langs              # list all supported languages and their codes
 ```
 
+## Keeping up to date
+
+The tool scrapes live websites which change their structure occasionally. If output looks wrong or empty, reinstall to get the latest fixes:
+```bash
+pipx reinstall define-cli
+```
+
 ## Supported languages
 
 | Code | Language   |

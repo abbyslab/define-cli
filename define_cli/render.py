@@ -68,9 +68,17 @@ def render(
             console.print(f"  [italic]{ex['source']}[/italic]")
             console.print(f"  [dim]{ex['translation']}[/dim]")
             console.print()
-    else:
-        console.print("\n  [dim]No examples found.[/dim]\n")
 
+    # Hint if everything came back empty
+    no_defs = not wikt_data or (not wikt_data.get("ipa") and not wikt_data.get("entries"))
+    no_examples = not reverso_data
+    if no_defs and no_examples:
+        console.print(
+            "\n  [dim]No results found. If this seems wrong, try:"
+            " pipx reinstall define-cli[/dim]\n"
+        )
+    elif no_examples:
+        console.print("\n  [dim]No examples found.[/dim]\n")
 
 def _render_examples(word: str, reverso_data: list[dict] | None) -> None:
     console.print()
