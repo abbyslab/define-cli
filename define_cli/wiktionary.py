@@ -195,8 +195,5 @@ def fetch(word: str, lang: str) -> dict | None:
                 else:
                     entries.append({"pos": current_pos, "definitions": defs})
 
-    if not ipa_list and not entries:
-        return None
-
     return {"ipa": ipa_list, "entries": entries}
 
