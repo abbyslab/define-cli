@@ -1,8 +1,8 @@
 test:
-	pytest -v
+	.venv/bin/pytest -v
 
 live:
-	python3 tests/test_live.py
+	.venv/bin/python3 tests/test_live.py
 
 .PHONY: test live
 
