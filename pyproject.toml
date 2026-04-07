@@ -21,3 +21,6 @@ define = "define_cli.main:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["define_cli*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

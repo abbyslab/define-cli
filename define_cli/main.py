@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 import concurrent.futures
-
+from .render import console
 from . import wiktionary, reverso, render
 
 SUPPORTED_LANGS = {
@@ -56,11 +56,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "lang",
         metavar="LANG",
+        nargs="?",
         help=f"Language code ({', '.join(SUPPORTED_LANGS)})",
     )
     p.add_argument(
         "word",
         metavar="WORD",
+        nargs="?",
         help="Word to look up",
     )
     p.add_argument(
@@ -78,12 +80,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip Reverso (usage examples)",
     )
+    p.add_argument(
+        "--langs",
+        action="store_true",
+        help="List all supported languages and their codes",
+    )
     return p
 
 
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.langs:
+        for code, name in sorted(SUPPORTED_LANGS.items(), key=lambda x: x[1]):
+            console.print(f"  [dim]{code}[/dim]  {name}")
+        return
 
     lang = args.lang.lower()
     word = args.word
@@ -94,6 +106,10 @@ def main() -> None:
             f"Supported: {', '.join(SUPPORTED_LANGS)}",
             file=sys.stderr,
         )
+        sys.exit(1)
+
+    if not args.lang or not args.word:
+        parser.print_help()
         sys.exit(1)
 
     examples_limit = None if args.examples else DEFAULT_EXAMPLE_COUNT

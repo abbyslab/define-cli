@@ -129,3 +129,45 @@ class TestMainIntegration:
             call_kwargs = mock_reverso.call_args
             # limit arg is positional index 2
             assert call_kwargs.args[2] is None or call_kwargs.kwargs.get("limit") is None
+
+class TestLangsFlag:
+    def test_langs_flag_exits_cleanly(self):
+        with patch("sys.argv", ["define", "--langs"]):
+            try:
+                main()
+            except SystemExit as e:
+                assert e.code == 0 or e.code is None
+
+    def test_langs_output_contains_french(self, capsys):
+        with patch("sys.argv", ["define", "--langs"]):
+            try:
+                main()
+            except SystemExit:
+                pass
+        out = capsys.readouterr().out
+        assert "French" in out
+        assert "fr" in out
+
+    def test_langs_output_contains_all_codes(self, capsys):
+        with patch("sys.argv", ["define", "--langs"]):
+            try:
+                main()
+            except SystemExit:
+                pass
+        out = capsys.readouterr().out
+        for code in ["ar", "ca", "zh", "cs", "da", "nl", "fr", "de", "el",
+                     "he", "hi", "hu", "it", "ja", "ko", "fa", "pl", "pt",
+                     "ro", "ru", "sk", "es", "sv", "th", "tr", "uk", "vi"]:
+            assert code in out, f"Missing language code: {code}"
+
+    def test_no_args_exits_with_error(self):
+        with patch("sys.argv", ["define"]):
+            with pytest.raises(SystemExit) as exc:
+                main()
+            assert exc.value.code != 0
+
+    def test_lang_without_word_exits_with_error(self):
+        with patch("sys.argv", ["define", "fr"]):
+            with pytest.raises(SystemExit) as exc:
+                main()
+            assert exc.value.code != 0
