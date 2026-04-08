@@ -7,16 +7,12 @@ from define_cli import wiktionary
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
-
 def _mock_get(fixture_file, status=200):
     """Return a mock requests.Response backed by a fixture file."""
     resp = MagicMock()
     resp.status_code = status
     resp.text = (FIXTURES / fixture_file).read_text(encoding="utf-8")
     return resp
-
-
-# ── bonjour (French) ────────────────────────────────────────────────────────
 
 class TestBonjour:
     @pytest.fixture(autouse=True)
@@ -73,9 +69,6 @@ class TestBonjour:
         ]
         assert not any("borrowed from French" in d for d in all_defs)
 
-
-# ── ingewikkeld (Dutch) ──────────────────────────────────────────────────────
-
 class TestIngewikkeld:
     @pytest.fixture(autouse=True)
     def mock_request(self):
@@ -98,16 +91,10 @@ class TestIngewikkeld:
         joined = " ".join(entry["definitions"]).lower()
         assert "complicated" in joined or "complex" in joined
 
-
-# ── unsupported language ─────────────────────────────────────────────────────
-
 class TestUnsupportedLang:
     def test_returns_none_for_unknown_lang(self):
         result = wiktionary.fetch("bonjour", "xx")
         assert result is None
-
-
-# ── word not found ───────────────────────────────────────────────────────────
 
 class TestMissingWord:
     def test_returns_none_when_no_section(self):
@@ -121,9 +108,6 @@ class TestMissingWord:
                    return_value=_mock_get("wikt_missing.html", status=404)):
             result = wiktionary.fetch("zzznonsense", "fr")
         assert result is None
-
-
-# ── lang mismatch ────────────────────────────────────────────────────────────
 
 class TestLangMismatch:
     def test_returns_none_for_wrong_lang(self):
@@ -162,3 +146,30 @@ class TestNativeFallback:
 
         assert result is not None
         assert result["ipa"] == ["/lopt/"]
+
+class TestPOSTags:
+    def test_participle_is_recognised(self):
+        """'Participle' must be in POS_TAGS so past participles get definitions."""
+        assert "Participle" in wiktionary.POS_TAGS
+
+class TestLooksLikeIPA:
+    def test_rejects_rhyme_notation(self):
+        assert not wiktionary._looks_like_ipa("-oːpt")
+
+    def test_rejects_prononciation_placeholder(self):
+        assert not wiktionary._looks_like_ipa("[Prononciation?]")
+
+    def test_accepts_slash_delimited(self):
+        assert wiktionary._looks_like_ipa("/bɔ̃.ʒuʁ/")
+
+    def test_accepts_bracket_delimited_with_ipa_chars(self):
+        assert wiktionary._looks_like_ipa("[ɡəlaufn̩]")
+
+    def test_accepts_stress_marked(self):
+        assert wiktionary._looks_like_ipa("ˈʃmɛtɐˌlɪŋə")
+
+    def test_accepts_backslash_delimited(self):
+        assert wiktionary._looks_like_ipa("\\ʃɑ̃.tjɔ̃\\")
+
+    def test_rejects_plain_word(self):
+        assert not wiktionary._looks_like_ipa("loopt")

@@ -5,7 +5,7 @@ setup:
 	chmod +x define
 
 test:
-	.venv/bin/pytest -v
+	.venv/bin/pytest -v --ignore=tests/test_live.py
 
 live:
 	.venv/bin/python3 tests/test_live.py

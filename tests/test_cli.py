@@ -3,9 +3,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from define_cli.main import build_parser, main
-
-
-# ── Parser unit tests ────────────────────────────────────────────────────────
+from define_cli import wiktionary
 
 class TestParser:
     def setup_method(self):
@@ -54,9 +52,6 @@ class TestParser:
         args = self.parser.parse_args(["fr", "bonjour", "--no-defs", "--no-examples"])
         assert args.no_defs is True
         assert args.no_examples is True
-
-
-# ── main() integration (mocked fetchers) ────────────────────────────────────
 
 MOCK_WIKT = {
     "ipa": ["/bɔ̃.ʒuʁ/"],
@@ -173,3 +168,25 @@ class TestLangsFlag:
             with pytest.raises(SystemExit) as exc:
                 main()
             assert exc.value.code != 0
+
+class TestRenderSkippedSources:
+    def _run(self, argv, wikt=None, reverso=None):
+        with patch("define_cli.main.wiktionary.fetch", return_value=wikt), \
+             patch("define_cli.main.reverso.fetch", return_value=reverso), \
+             patch("sys.argv", ["define"] + argv):
+            main()
+
+    def test_no_defs_flag_no_definitions_message(self, capsys):
+        self._run(["fr", "bonjour", "--no-defs"], reverso=MOCK_REVERSO)
+        out = capsys.readouterr().out
+        assert "No definitions found" not in out
+
+    def test_no_examples_flag_no_examples_message(self, capsys):
+        self._run(["fr", "bonjour", "--no-examples"], wikt=MOCK_WIKT)
+        out = capsys.readouterr().out
+        assert "No examples found" not in out
+
+    def test_no_results_hint_not_shown_when_sources_skipped(self, capsys):
+        self._run(["fr", "bonjour", "--no-defs", "--no-examples"])
+        out = capsys.readouterr().out
+        assert "pipx reinstall" not in out

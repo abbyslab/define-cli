@@ -47,6 +47,7 @@ POS_TAGS = {
     "Noun", "Verb", "Adjective", "Adverb", "Preposition",
     "Conjunction", "Interjection", "Pronoun", "Article",
     "Determiner", "Numeral", "Particle", "Suffix", "Prefix",
+    "Participle",
 }
 
 NATIVE_WIKT_LANGS = {
