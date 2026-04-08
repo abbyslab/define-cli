@@ -71,12 +71,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fetch and display all available Reverso examples",
     )
     p.add_argument(
-        "--no-wikt",
+        "--no-defs",
         action="store_true",
         help="Skip Wiktionary (definitions + IPA)",
     )
     p.add_argument(
-        "--no-reverso",
+        "--no-examples",
         action="store_true",
         help="Skip Reverso (usage examples)",
     )
@@ -121,10 +121,10 @@ def main() -> None:
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         futures = {}
 
-        if not args.no_wikt:
+        if not args.no_defs:
             futures["wikt"] = pool.submit(wiktionary.fetch, word, lang)
 
-        if not args.no_reverso:
+        if not args.no_examples:
             futures["reverso"] = pool.submit(
                 reverso.fetch, word, lang, examples_limit
             )
@@ -147,6 +147,8 @@ def main() -> None:
         wikt_data=wikt_data,
         reverso_data=reverso_data,
         examples_only=args.examples,
+        wikt_skipped=args.no_defs,
+        reverso_skipped=args.no_examples,
     )
 
 

@@ -25,13 +25,14 @@ POS_COLOURS = {
     "Prefix":      "dim",
 }
 
-
 def render(
     word: str,
     lang: str,
     wikt_data: dict | None,
     reverso_data: list[dict] | None,
     examples_only: bool = False,
+    wikt_skipped: bool = False,
+    reverso_skipped: bool = False,
 ) -> None:
 
     if examples_only:
@@ -63,7 +64,7 @@ def render(
             console.print(f"\n  [{colour}]{pos.lower()}[/{colour}]")
             for i, defn in enumerate(entry["definitions"], 1):
                 console.print(f"  [dim]{i}.[/dim] {defn}")
-    elif not examples_only:
+    elif not examples_only and not wikt_skipped:
         console.print("  [dim]No definitions found.[/dim]")
 
     # ── Examples (short) ────────────────────────────────────────────────────
@@ -76,14 +77,14 @@ def render(
             console.print()
 
     # Hint if everything came back empty
-    no_defs = not wikt_data or (not wikt_data.get("ipa") and not wikt_data.get("entries"))
-    no_examples = not reverso_data
-    if no_defs and no_examples:
+    no_defs = wikt_skipped or not wikt_data or (not wikt_data.get("ipa") and not wikt_data.get("entries"))
+    no_examples = reverso_skipped or not reverso_data
+    if not wikt_skipped and not reverso_skipped and no_defs and no_examples:
         console.print(
             "\n  [dim]No results found. If this seems wrong, try:"
             " pipx reinstall define-cli[/dim]\n"
         )
-    elif no_examples:
+    elif not reverso_skipped and not reverso_data:
         console.print("\n  [dim]No examples found.[/dim]\n")
 
 def _render_examples(word: str, reverso_data: list[dict] | None) -> None:

@@ -16,8 +16,8 @@ class TestParser:
         assert args.lang == "fr"
         assert args.word == "bonjour"
         assert not args.examples
-        assert not args.no_wikt
-        assert not args.no_reverso
+        assert not args.no_defs
+        assert not args.no_examples
 
     def test_examples_short_flag(self):
         args = self.parser.parse_args(["fr", "bonjour", "-e"])
@@ -27,13 +27,13 @@ class TestParser:
         args = self.parser.parse_args(["fr", "bonjour", "--examples"])
         assert args.examples is True
 
-    def test_no_wikt_flag(self):
-        args = self.parser.parse_args(["fr", "bonjour", "--no-wikt"])
-        assert args.no_wikt is True
+    def test_no_defs_flag(self):
+        args = self.parser.parse_args(["fr", "bonjour", "--no-defs"])
+        assert args.no_defs is True
 
-    def test_no_reverso_flag(self):
-        args = self.parser.parse_args(["fr", "bonjour", "--no-reverso"])
-        assert args.no_reverso is True
+    def test_no_examples_flag(self):
+        args = self.parser.parse_args(["fr", "bonjour", "--no-examples"])
+        assert args.no_examples is True
 
     def test_dutch_word(self):
         args = self.parser.parse_args(["nl", "ingewikkeld"])
@@ -51,9 +51,9 @@ class TestParser:
                 main()
 
     def test_flags_can_combine(self):
-        args = self.parser.parse_args(["fr", "bonjour", "--no-wikt", "--no-reverso"])
-        assert args.no_wikt is True
-        assert args.no_reverso is True
+        args = self.parser.parse_args(["fr", "bonjour", "--no-defs", "--no-examples"])
+        assert args.no_defs is True
+        assert args.no_examples is True
 
 
 # ── main() integration (mocked fetchers) ────────────────────────────────────
@@ -109,17 +109,17 @@ class TestMainIntegration:
                 main()
             assert exc.value.code == 1
 
-    def test_no_wikt_skips_wiktionary(self):
+    def test_no_defs_skips_wiktionary(self):
         with patch("define_cli.main.wiktionary.fetch") as mock_wikt, \
              patch("define_cli.main.reverso.fetch", return_value=MOCK_REVERSO), \
-             patch("sys.argv", ["define", "fr", "bonjour", "--no-wikt"]):
+             patch("sys.argv", ["define", "fr", "bonjour", "--no-defs"]):
             main()
             mock_wikt.assert_not_called()
 
-    def test_no_reverso_skips_reverso(self):
+    def test_no_examples_skips_reverso(self):
         with patch("define_cli.main.wiktionary.fetch", return_value=MOCK_WIKT), \
              patch("define_cli.main.reverso.fetch") as mock_reverso, \
-             patch("sys.argv", ["define", "fr", "bonjour", "--no-reverso"]):
+             patch("sys.argv", ["define", "fr", "bonjour", "--no-examples"]):
             main()
             mock_reverso.assert_not_called()
 

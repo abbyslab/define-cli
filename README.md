@@ -9,12 +9,12 @@ pipx install git+https://github.com/abbyslab/define-cli
 
 ## Usage
 ```bash
-define fr bonjour          # IPA + definitions + 5 examples
+define fr bonjour          			# IPA + definitions + 5 examples
 define nl ingewikkeld
-define fr bonjour -e       # full examples dump
-define fr bonjour --no-reverso   # definitions only
-define fr bonjour --no-wikt      # examples only
-define --langs              # list all supported languages and their codes
+define fr bonjour -e       			# full examples dump
+define fr bonjour --no-examples   	# definitions only
+define fr bonjour --no-defs      	# examples only
+define --langs              		# list all supported languages and their codes
 ```
 
 ## Keeping up to date
