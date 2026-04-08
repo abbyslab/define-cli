@@ -15,6 +15,7 @@ define fr bonjour -e       			# full examples dump
 define fr bonjour --no-examples   	# definitions only
 define fr bonjour --no-defs      	# examples only
 define --langs              		# list all supported languages and their codes
+define --shell fr 					# interactive shell mode for French
 ```
 
 ## Keeping up to date

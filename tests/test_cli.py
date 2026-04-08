@@ -15,17 +15,17 @@ class TestParser:
         args = self.parser.parse_args(["fr", "bonjour"])
         assert args.lang == "fr"
         assert args.word == "bonjour"
-        assert not args.examples
+        assert not args.extended
         assert not args.no_defs
         assert not args.no_examples
 
     def test_examples_short_flag(self):
         args = self.parser.parse_args(["fr", "bonjour", "-e"])
-        assert args.examples is True
+        assert args.extended is True
 
     def test_examples_long_flag(self):
-        args = self.parser.parse_args(["fr", "bonjour", "--examples"])
-        assert args.examples is True
+        args = self.parser.parse_args(["fr", "bonjour", "--extended"])
+        assert args.extended is True
 
     def test_no_defs_flag(self):
         args = self.parser.parse_args(["fr", "bonjour", "--no-defs"])

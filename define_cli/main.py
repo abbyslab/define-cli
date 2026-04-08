@@ -4,7 +4,7 @@ Usage:
     define fr bonjour
     define nl ingewikkeld
     define fr bonjour -e
-    define fr bonjour --examples
+    define fr bonjour --extended
 """
 
 from __future__ import annotations
@@ -44,8 +44,30 @@ SUPPORTED_LANGS = {
     "vi": "Vietnamese",
 }
 
-DEFAULT_EXAMPLE_COUNT = 5
+DEFAULT_EXAMPLE_COUNT = 3
 
+LANG_NAMES = wiktionary.LANG_SECTION_NAMES
+
+def shell_mode(lang: str) -> None:
+    from rich.console import Console
+    console = Console()
+    console.print(f"  [dim]Shell mode — {LANG_NAMES.get(lang, lang)}. Ctrl+C to exit.[/dim]\n")
+    while True:
+        try:
+            word = input("> ").strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print()
+            break
+        if not word:
+            continue
+        wikt_data = wiktionary.fetch(word, lang)
+        render.render(
+            word=word,
+            lang=lang,
+            wikt_data=wikt_data,
+            reverso_data=None,
+            reverso_skipped=True,
+        )
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -66,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Word to look up",
     )
     p.add_argument(
-        "-e", "--examples",
+        "-e", "--extended",
         action="store_true",
         help="Fetch and display all available Reverso examples",
     )
@@ -85,6 +107,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="List all supported languages and their codes",
     )
+    p.add_argument(
+        "--shell",
+        metavar="LANG",
+        help="Interactive shell mode for a given language",
+    )
     return p
 
 
@@ -95,6 +122,14 @@ def main() -> None:
     if args.langs:
         for code, name in sorted(SUPPORTED_LANGS.items(), key=lambda x: x[1]):
             console.print(f"  [dim]{code}[/dim]  {name}")
+        return
+
+    if args.shell:
+        lang = args.shell.lower()
+        if lang not in SUPPORTED_LANGS:
+            print(f"Unsupported language: {lang}", file=sys.stderr)
+            sys.exit(1)
+        shell_mode(lang)
         return
 
     if not args.lang or not args.word:
@@ -112,7 +147,7 @@ def main() -> None:
         )
         sys.exit(1)
 
-    examples_limit = None if args.examples else DEFAULT_EXAMPLE_COUNT
+    examples_limit = None if args.extended else DEFAULT_EXAMPLE_COUNT
 
     # Fetch sources concurrently
     wikt_data = None
@@ -146,7 +181,7 @@ def main() -> None:
         lang=lang,
         wikt_data=wikt_data,
         reverso_data=reverso_data,
-        examples_only=args.examples,
+        examples_only=args.extended,
         wikt_skipped=args.no_defs,
         reverso_skipped=args.no_examples,
     )
