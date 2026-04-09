@@ -293,7 +293,7 @@ def fetch(word: str, lang: str) -> dict:
         if title not in variants:
             variants.append(title)
 
-    network_failed = False
+    any_network_success = False
     soup = None
     actual_word = word
     lang_container = None
@@ -301,15 +301,20 @@ def fetch(word: str, lang: str) -> dict:
     for variant in variants:
         s = _fetch_soup(variant)
         if s is None:
-            network_failed = True
             continue
-        network_failed = False
+        any_network_success = True
         lc = _find_lang_container(s, lang_name)
         if lc is not None:
             soup = s
             lang_container = lc
             actual_word = variant
             break
+
+    if lang_container is None:
+        if not any_network_success:
+            return {"status": "network_error"}
+        return {"status": "not_found"}
+
 
     if lang_container is None:
         if network_failed:
@@ -377,9 +382,16 @@ def fetch(word: str, lang: str) -> dict:
 
     # Invariant assertions — fail loud if structure is wrong
     assert isinstance(ipa_list, list), "ipa_list must be a list"
+    assert all(isinstance(s, str) for s in ipa_list), "all IPA entries must be strings"
     assert isinstance(entries, list), "entries must be a list"
     assert all(isinstance(e, dict) for e in entries), "each entry must be a dict"
     assert all("pos" in e and "definitions" in e for e in entries), \
         "each entry must have 'pos' and 'definitions'"
+    assert all(isinstance(e["pos"], str) for e in entries), "pos must be a string"
+    assert all(
+        isinstance(e["definitions"], list) and
+        all(isinstance(d, str) for d in e["definitions"])
+        for e in entries
+    ), "definitions must be a list of strings"
 
     return {"status": "ok", "ipa": ipa_list, "entries": entries, "actual_word": actual_word}
