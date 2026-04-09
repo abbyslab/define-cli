@@ -49,6 +49,10 @@ DEFAULT_EXAMPLE_COUNT = 3
 LANG_NAMES = wiktionary.LANG_SECTION_NAMES
 
 
+def _debug(msg: str) -> None:
+    print(f"[debug] {msg}", file=sys.stderr)
+
+
 def shell_mode(lang: str) -> None:
     from rich.console import Console
     console = Console()
@@ -119,6 +123,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="LANG",
         help="Interactive shell mode for a given language",
     )
+    p.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print parse diagnostics to stderr",
+    )
     return p
 
 
@@ -185,6 +194,17 @@ def main() -> None:
                 wikt_result = result
             elif key == "reverso":
                 reverso_result = result
+
+    if args.debug:
+        _debug(f"wiktionary status: {wikt_result.get('status')}")
+        if wikt_result.get("status") == "ok":
+            _debug(f"ipa: {wikt_result.get('ipa')}")
+            _debug(f"entries: {len(wikt_result.get('entries', []))} POS blocks")
+            for e in wikt_result.get("entries", []):
+                _debug(f"  {e['pos']}: {len(e['definitions'])} definitions")
+        _debug(f"reverso status: {reverso_result.get('status')}")
+        if reverso_result.get("status") == "ok":
+            _debug(f"examples: {len(reverso_result.get('examples', []))}")
 
     render.render(
         word=word,
