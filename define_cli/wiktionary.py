@@ -101,12 +101,10 @@ def _ipa_native_ipAtekst(soup: BeautifulSoup) -> list[str]:
 
 
 def _ipa_native_fr(soup: BeautifulSoup) -> list[str]:
-    # French: span.API + span.audio-ipa, backslash delimiters \...\
     return _ipa_span_classes(soup, "API", "audio-ipa")
 
 
 def _ipa_native_uk(soup: BeautifulSoup) -> list[str]:
-    # Ukrainian: IPA in <font> tags
     results: list[str] = []
     for font in soup.find_all("font"):
         text = font.get_text(strip=True)
@@ -116,7 +114,6 @@ def _ipa_native_uk(soup: BeautifulSoup) -> list[str]:
 
 
 def _ipa_native_es(soup: BeautifulSoup) -> list[str]:
-    # Spanish: IPA in td inside table.pron-graf
     results: list[str] = []
     for table in soup.find_all("table", class_="pron-graf"):
         for td in table.find_all("td"):
@@ -134,7 +131,6 @@ def _ipa_native_es(soup: BeautifulSoup) -> list[str]:
 
 
 def _ipa_native_el(soup: BeautifulSoup) -> list[str]:
-    # Greek: IPA in dd tags containing ΔΦΑ
     results: list[str] = []
     for dd in soup.find_all("dd"):
         text = dd.get_text(strip=True)
@@ -147,7 +143,6 @@ def _ipa_native_el(soup: BeautifulSoup) -> list[str]:
 
 
 def _ipa_native_fa(soup: BeautifulSoup) -> list[str]:
-    # Persian: /word/ pattern in section text
     results: list[str] = []
     for section in soup.find_all("section"):
         text = section.get_text(strip=True)
@@ -159,7 +154,6 @@ def _ipa_native_fa(soup: BeautifulSoup) -> list[str]:
 
 
 def _ipa_native_ro(soup: BeautifulSoup) -> list[str]:
-    # Romanian: IPA in section containing AFI:
     results: list[str] = []
     for section in soup.find_all("section"):
         text = section.get_text(strip=True)
@@ -173,9 +167,7 @@ def _ipa_native_ro(soup: BeautifulSoup) -> list[str]:
     return results
 
 
-# Dispatch table: lang code → list of extractor functions (tried in order)
 _NATIVE_IPA_EXTRACTORS: dict[str, list] = {
-    # span.IPA
     "ar": [_ipa_native_default],
     "ca": [_ipa_native_default],
     "zh": [_ipa_native_default],
@@ -189,40 +181,32 @@ _NATIVE_IPA_EXTRACTORS: dict[str, list] = {
     "hu": [_ipa_native_default],
     "sk": [_ipa_native_default],
     "tr": [_ipa_native_default],
-    # span.ipa (lowercase)
     "pt": [_ipa_native_ipa_lower],
     "pl": [_ipa_native_ipa_lower],
     "de": [_ipa_native_ipa_lower],
     "ru": [_ipa_native_ipa_lower],
-    # span.IPAtekst
     "nl": [_ipa_native_ipAtekst],
     "sv": [_ipa_native_ipAtekst],
-    # Language-specific
     "fr": [_ipa_native_fr],
     "uk": [_ipa_native_uk],
     "es": [_ipa_native_es],
     "el": [_ipa_native_el],
     "fa": [_ipa_native_fa],
     "ro": [_ipa_native_ro],
-    # No parseable IPA on native Wiktionary
     "he": [],
     "hi": [],
 }
 
 
 def _heading_id(tag: Tag) -> str | None:
-    """Extract normalised heading id from any known Wiktionary heading structure."""
-    # 1. id directly on tag (new style bare h2/h3)
     tag_id = tag.get("id", "")
     if tag_id:
         return re.sub(r"_\d+$", "", tag_id)
-    # 2. id on inner h2/h3/h4 (new style div.mw-heading wrapping)
     inner = tag.find(["h2", "h3", "h4"])
     if inner:
         inner_id = inner.get("id", "")
         if inner_id:
             return re.sub(r"_\d+$", "", inner_id)
-    # 3. old style mw-headline span
     span = tag.find("span", class_="mw-headline")
     if span:
         return span.get_text(strip=True)
@@ -230,7 +214,6 @@ def _heading_id(tag: Tag) -> str | None:
 
 
 def _is_lang_heading(tag: Tag) -> bool:
-    """True if tag marks the start of a new language section."""
     if tag.name == "div" and "mw-heading2" in tag.get("class", []):
         return True
     if tag.name == "h2":
@@ -262,10 +245,8 @@ def _looks_like_ipa(text: str) -> bool:
     t = text.strip()
     if not t:
         return False
-    # Has stress marks — accept regardless
     if re.search(r'[ˈˌ]', t):
         return True
-    # Has /.../ or [...] or \...\ delimiters — accept unless known placeholder
     if re.search(r'^[/\[\\]', t) or re.search(r'[/\]\\]$', t):
         if re.search(r'Prononciation|Pronunciation|\?', t):
             return False
@@ -277,7 +258,6 @@ def _fetch_ipa_native(word: str, lang: str) -> list[str]:
     extractors = _NATIVE_IPA_EXTRACTORS.get(lang, [])
     if not extractors:
         return []
-
     url = f"https://{lang}.wiktionary.org/wiki/{requests.utils.quote(word)}"
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
@@ -285,9 +265,7 @@ def _fetch_ipa_native(word: str, lang: str) -> list[str]:
             return []
     except Exception:
         return []
-
     soup = BeautifulSoup(resp.text, "lxml")
-
     for extractor in extractors:
         results = extractor(soup)
         if results:
@@ -295,12 +273,17 @@ def _fetch_ipa_native(word: str, lang: str) -> list[str]:
     return []
 
 
-def fetch(word: str, lang: str) -> dict | None:
+def fetch(word: str, lang: str) -> dict:
+    """
+    Returns one of:
+      {"status": "ok", "ipa": [...], "entries": [...], "actual_word": "..."}
+      {"status": "not_found"}
+      {"status": "network_error"}
+    """
     lang_name = LANG_SECTION_NAMES.get(lang)
     if not lang_name:
-        return None
+        return {"status": "not_found"}
 
-    # Build list of word variants to try, in order
     variants = [word]
     if lang in LATIN_SCRIPT_LANGS:
         lower = word.lower()
@@ -310,21 +293,28 @@ def fetch(word: str, lang: str) -> dict | None:
         if title not in variants:
             variants.append(title)
 
+    network_failed = False
     soup = None
     actual_word = word
     lang_container = None
 
     for variant in variants:
-        soup = _fetch_soup(variant)
-        if soup is None:
+        s = _fetch_soup(variant)
+        if s is None:
+            network_failed = True
             continue
-        lang_container = _find_lang_container(soup, lang_name)
-        if lang_container is not None:
+        network_failed = False
+        lc = _find_lang_container(s, lang_name)
+        if lc is not None:
+            soup = s
+            lang_container = lc
             actual_word = variant
             break
 
-    if lang_container is None or soup is None:
-        return None
+    if lang_container is None:
+        if network_failed:
+            return {"status": "network_error"}
+        return {"status": "not_found"}
 
     # Collect siblings until the next language-level heading
     section_nodes: list[Tag] = []
@@ -342,7 +332,6 @@ def fetch(word: str, lang: str) -> dict | None:
             if text and text not in ipa_list and _looks_like_ipa(text):
                 ipa_list.append(text)
 
-    # IPA fallback: try native-language Wiktionary if EN gave nothing
     if not ipa_list and lang in NATIVE_WIKT_LANGS:
         ipa_list = _fetch_ipa_native(actual_word, lang)
 
@@ -386,4 +375,11 @@ def fetch(word: str, lang: str) -> dict | None:
                 else:
                     entries.append({"pos": current_pos, "definitions": defs})
 
-    return {"ipa": ipa_list, "entries": entries, "actual_word": actual_word}
+    # Invariant assertions — fail loud if structure is wrong
+    assert isinstance(ipa_list, list), "ipa_list must be a list"
+    assert isinstance(entries, list), "entries must be a list"
+    assert all(isinstance(e, dict) for e in entries), "each entry must be a dict"
+    assert all("pos" in e and "definitions" in e for e in entries), \
+        "each entry must have 'pos' and 'definitions'"
+
+    return {"status": "ok", "ipa": ipa_list, "entries": entries, "actual_word": actual_word}

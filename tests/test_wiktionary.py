@@ -8,6 +8,7 @@ from define_cli import wiktionary
 FIXTURES = Path(__file__).parent / "fixtures"
 
 MOCK_WIKT = {
+    "status": "ok",
     "ipa": ["/bɔ̃.ʒuʁ/"],
     "entries": [{"pos": "Interjection", "definitions": ["hello, good morning"]}],
     "actual_word": "bonjour",
@@ -97,32 +98,6 @@ class TestIngewikkeld:
         joined = " ".join(entry["definitions"]).lower()
         assert "complicated" in joined or "complex" in joined
 
-class TestUnsupportedLang:
-    def test_returns_none_for_unknown_lang(self):
-        result = wiktionary.fetch("bonjour", "xx")
-        assert result is None
-
-class TestMissingWord:
-    def test_returns_none_when_no_section(self):
-        with patch("define_cli.wiktionary.requests.get",
-                   return_value=_mock_get("wikt_missing.html")):
-            result = wiktionary.fetch("zzznonsense", "fr")
-        assert result is None
-
-    def test_returns_none_on_http_error(self):
-        with patch("define_cli.wiktionary.requests.get",
-                   return_value=_mock_get("wikt_missing.html", status=404)):
-            result = wiktionary.fetch("zzznonsense", "fr")
-        assert result is None
-
-class TestLangMismatch:
-    def test_returns_none_for_wrong_lang(self):
-        """Fetching Dutch entry with fr lang should return None."""
-        with patch("define_cli.wiktionary.requests.get",
-                   return_value=_mock_get("wikt_ingewikkeld.html")):
-            result = wiktionary.fetch("ingewikkeld", "fr")
-        assert result is None
-
 class TestNativeFallback:
     def test_dutch_inflected_form_gets_ipa(self):
         """loopt has no IPA on EN Wiktionary, so native nl.wiktionary fallback must fire."""
@@ -151,6 +126,8 @@ class TestNativeFallback:
             result = wiktionary.fetch("loopt", "nl")
 
         assert result is not None
+        assert result["ipa"] == ["/lopt/"]
+        assert result["status"] == "ok"
         assert result["ipa"] == ["/lopt/"]
 
 class TestPOSTags:
@@ -268,50 +245,68 @@ class TestUnknownPOS:
         assert "Noun" in pos_list
         assert "Verb" in pos_list
 
+class TestUnsupportedLang:
+    def test_returns_not_found_for_unknown_lang(self):
+        result = wiktionary.fetch("bonjour", "xx")
+        assert result["status"] == "not_found"
+
+class TestMissingWord:
+    def test_returns_not_found_when_no_section(self):
+        with patch("define_cli.wiktionary.requests.get",
+                   return_value=_mock_get("wikt_missing.html")):
+            result = wiktionary.fetch("zzznonsense", "fr")
+        assert result["status"] == "not_found"
+
+    def test_returns_network_error_on_http_error(self):
+        with patch("define_cli.wiktionary.requests.get",
+                   return_value=_mock_get("wikt_missing.html", status=404)):
+            result = wiktionary.fetch("zzznonsense", "fr")
+        assert result["status"] == "network_error"
+
+class TestLangMismatch:
+    def test_returns_not_found_for_wrong_lang(self):
+        with patch("define_cli.wiktionary.requests.get",
+                   return_value=_mock_get("wikt_ingewikkeld.html")):
+            result = wiktionary.fetch("ingewikkeld", "fr")
+        assert result["status"] == "not_found"
 
 class TestRendererNoneCases:
-    """Test render() directly with edge-case inputs."""
-
-    def test_render_none_wikt_data(self, capsys):
+    def test_render_not_found_wikt(self, capsys):
         from define_cli import render
         render.render(
-            word="test",
-            lang="fr",
-            wikt_data=None,
-            reverso_data=None,
+            word="test", lang="fr",
+            wikt_result={"status": "not_found"},
+            reverso_result={"status": "not_found"},
         )
         out = capsys.readouterr().out
         assert "pipx reinstall" in out
 
-    def test_render_empty_ipa_list(self, capsys):
+    def test_render_ok_wikt_empty_ipa(self, capsys):
         from define_cli import render
         render.render(
-            word="test",
-            lang="fr",
-            wikt_data={"ipa": [], "entries": [{"pos": "Noun", "definitions": ["thing"]}], "actual_word": "test"},
-            reverso_data=None,
+            word="test", lang="fr",
+            wikt_result={"status": "ok", "ipa": [], "entries": [{"pos": "Noun", "definitions": ["thing"]}], "actual_word": "test"},
+            reverso_result={"status": "not_found"},
         )
         out = capsys.readouterr().out
         assert "thing" in out
 
-    def test_render_none_reverso_shows_no_examples(self, capsys):
+    def test_render_no_examples(self, capsys):
         from define_cli import render
         render.render(
-            word="test",
-            lang="fr",
-            wikt_data=MOCK_WIKT,
-            reverso_data=None,
+            word="test", lang="fr",
+            wikt_result=MOCK_WIKT,
+            reverso_result={"status": "not_found"},
         )
         out = capsys.readouterr().out
         assert "No examples found" in out
 
-    def test_render_empty_reverso_list(self, capsys):
+    def test_render_network_error_wikt(self, capsys):
         from define_cli import render
         render.render(
-            word="test",
-            lang="fr",
-            wikt_data=MOCK_WIKT,
-            reverso_data=[],
+            word="test", lang="fr",
+            wikt_result={"status": "network_error"},
+            reverso_result={"status": "not_found"},
         )
         out = capsys.readouterr().out
-        assert "No examples found" in out
+        assert "Could not reach Wiktionary" in out

@@ -48,6 +48,7 @@ DEFAULT_EXAMPLE_COUNT = 3
 
 LANG_NAMES = wiktionary.LANG_SECTION_NAMES
 
+
 def shell_mode(lang: str) -> None:
     from rich.console import Console
     console = Console()
@@ -62,7 +63,7 @@ def shell_mode(lang: str) -> None:
             continue
 
         try:
-            wikt_data = wiktionary.fetch(word, lang)
+            wikt_result = wiktionary.fetch(word, lang)
         except Exception:
             console.print("  [dim]Error fetching data.[/dim]")
             continue
@@ -70,10 +71,10 @@ def shell_mode(lang: str) -> None:
         render.render(
             word=word,
             lang=lang,
-            wikt_data=wikt_data,
-            reverso_data=None,
-            reverso_skipped=True,
+            wikt_result=wikt_result,
+            reverso_result={"status": "skipped"},
         )
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -159,9 +160,8 @@ def main() -> None:
 
     examples_limit = None if args.extended else DEFAULT_EXAMPLE_COUNT
 
-    # Fetch sources concurrently
-    wikt_data = None
-    reverso_data = None
+    wikt_result: dict = {"status": "skipped"}
+    reverso_result: dict = {"status": "skipped"}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         futures = {}
@@ -179,21 +179,19 @@ def main() -> None:
                 result = fut.result(timeout=15)
             except Exception as exc:
                 print(f"[{key}] error: {exc}", file=sys.stderr)
-                result = None
+                result = {"status": "network_error"}
 
             if key == "wikt":
-                wikt_data = result
+                wikt_result = result
             elif key == "reverso":
-                reverso_data = result
+                reverso_result = result
 
     render.render(
         word=word,
         lang=lang,
-        wikt_data=wikt_data,
-        reverso_data=reverso_data,
+        wikt_result=wikt_result,
+        reverso_result=reverso_result,
         examples_only=args.extended,
-        wikt_skipped=args.no_defs,
-        reverso_skipped=args.no_examples,
     )
 
 

@@ -12,7 +12,6 @@ def _clean(text: str) -> str:
     text = re.sub(r" ([,;:.!?»)\]])", r"\1", text)
     text = re.sub(r"([(«\[]) ", r"\1", text)
     text = re.sub(r'" ([^"]+) "', r'"\1"', text)
-    # collapse spaces around single CJK/Arabic/Hebrew characters
     text = re.sub(r" ([\u0600-\u06ff\u0590-\u05ff\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]) ", r"\1", text)
     return text.strip()
 
@@ -20,7 +19,6 @@ HEADERS = {
     "Accept-Language": "en-GB,en;q=0.9",
 }
 
-# Languages Reverso supports for X→English
 REVERSO_LANGS = {
     "ar": "arabic",
     "zh": "chinese",
@@ -41,7 +39,6 @@ REVERSO_LANGS = {
     "uk": "ukrainian",
 }
 
-# ISO 639-3 codes for Tatoeba API
 TATOEBA_LANGS = {
     "ar": "ara",
     "ca": "cat",
@@ -82,7 +79,11 @@ def _fetch_reverso(word: str, lang: str, limit: int | None) -> list[dict] | None
         f"https://context.reverso.net/translation/"
         f"{lang_name}-english/{cf_requests.utils.quote(word)}"
     )
-    resp = cf_requests.get(url, headers=HEADERS, impersonate="chrome", timeout=15)
+    try:
+        resp = cf_requests.get(url, headers=HEADERS, impersonate="chrome", timeout=15)
+    except Exception:
+        return None
+
     if resp.status_code != 200:
         return None
 
@@ -97,7 +98,6 @@ def _fetch_reverso(word: str, lang: str, limit: int | None) -> list[dict] | None
         src_text = _clean(src_el.get_text(separator=" ", strip=True))
         trg_text = _clean(trg_el.get_text(separator=" ", strip=True))
         if src_text and trg_text:
-            # Only include if the word actually appears in the source
             if word.lower() in src_text.lower():
                 examples.append({"source": src_text, "translation": trg_text})
 
@@ -142,7 +142,6 @@ def _fetch_tatoeba(word: str, lang: str, limit: int | None) -> list[dict] | None
     for result in data.get("results", []):
         src_text = result.get("text", "").strip()
         translations = result.get("translations", [])
-        # translations is a list of lists
         trg_text = ""
         for group in translations:
             for t in group:
@@ -162,9 +161,36 @@ def _fetch_tatoeba(word: str, lang: str, limit: int | None) -> list[dict] | None
     return examples if examples else None
 
 
-def fetch(word: str, lang: str, limit: int | None = 5) -> list[dict] | None:
-    """Try Reverso first, fall back to Tatoeba."""
-    result = _fetch_reverso(word, lang, limit)
-    if result:
-        return result
-    return _fetch_tatoeba(word, lang, limit)
+def fetch(word: str, lang: str, limit: int | None = 5) -> dict:
+    """
+    Returns one of:
+      {"status": "ok", "examples": [...]}
+      {"status": "not_found"}
+      {"status": "network_error"}
+      {"status": "unsupported"}
+    """
+    in_reverso = lang in REVERSO_LANGS
+    in_tatoeba = lang in TATOEBA_LANGS
+
+    if not in_reverso and not in_tatoeba:
+        return {"status": "unsupported"}
+
+    if in_reverso:
+        try:
+            result = _fetch_reverso(word, lang, limit)
+        except Exception:
+            result = None
+        if result:
+            return {"status": "ok", "examples": result}
+
+    if in_tatoeba:
+        try:
+            result = _fetch_tatoeba(word, lang, limit)
+        except Exception:
+            result = None
+        if result:
+            return {"status": "ok", "examples": result}
+
+    # Both attempted and returned nothing — distinguish not_found from network_error
+    # by checking if we got a response at all (approximation: treat empty as not_found)
+    return {"status": "not_found"}

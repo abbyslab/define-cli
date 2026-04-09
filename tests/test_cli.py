@@ -5,6 +5,23 @@ from unittest.mock import patch, MagicMock
 from define_cli.main import build_parser, main
 from define_cli import wiktionary
 
+MOCK_WIKT = {
+    "status": "ok",
+    "ipa": ["/bɔ̃.ʒuʁ/"],
+    "entries": [
+        {"pos": "Interjection", "definitions": ["hello, good morning"]}
+    ],
+    "actual_word": "bonjour",
+}
+
+MOCK_REVERSO = {
+    "status": "ok",
+    "examples": [
+        {"source": "Bonjour, comment allez-vous ?", "translation": "Hello, how are you?"},
+        {"source": "Il lui a dit bonjour.", "translation": "He said hello to her."},
+    ],
+}
+
 class TestParser:
     def setup_method(self):
         self.parser = build_parser()
@@ -56,19 +73,6 @@ class TestParser:
     def test_duplicate_flag_is_harmless(self):
         args = self.parser.parse_args(["fr", "bonjour", "--no-defs", "--no-defs"])
         assert args.no_defs is True
-
-MOCK_WIKT = {
-    "ipa": ["/bɔ̃.ʒuʁ/"],
-    "entries": [
-        {"pos": "Interjection", "definitions": ["hello, good morning"]}
-    ],
-}
-
-MOCK_REVERSO = [
-    {"source": "Bonjour, comment allez-vous ?", "translation": "Hello, how are you?"},
-    {"source": "Il lui a dit bonjour.", "translation": "He said hello to her."},
-]
-
 
 class TestMainIntegration:
     def _run(self, argv):
@@ -152,9 +156,9 @@ class TestMainIntegration:
                 main()
 
     def test_render_empty_entries_shows_reinstall_hint(self, capsys):
-        empty_wikt = {"ipa": [], "entries": [], "actual_word": "xyz"}
+        empty_wikt = {"status": "not_found"}
         with patch("define_cli.main.wiktionary.fetch", return_value=empty_wikt), \
-             patch("define_cli.main.reverso.fetch", return_value=None), \
+             patch("define_cli.main.reverso.fetch", return_value={"status": "not_found"}), \
              patch("sys.argv", ["define", "fr", "xyz"]):
             main()
         out = capsys.readouterr().out
@@ -262,12 +266,11 @@ class TestWhitespaceWord:
             with pytest.raises(SystemExit):
                 main()
 
-
 class TestPartialScrapeResults:
     def test_ipa_only_no_entries(self, capsys):
-        partial_wikt = {"ipa": ["/bɔ̃.ʒuʁ/"], "entries": [], "actual_word": "bonjour"}
+        partial_wikt = {"status": "ok", "ipa": ["/bɔ̃.ʒuʁ/"], "entries": [], "actual_word": "bonjour"}
         with patch("define_cli.main.wiktionary.fetch", return_value=partial_wikt), \
-             patch("define_cli.main.reverso.fetch", return_value=None), \
+             patch("define_cli.main.reverso.fetch", return_value={"status": "not_found"}), \
              patch("sys.argv", ["define", "fr", "bonjour"]):
             main()
         out = capsys.readouterr().out
@@ -276,16 +279,16 @@ class TestPartialScrapeResults:
         assert "No examples found" in out
 
     def test_entries_only_no_ipa(self, capsys):
-        partial_wikt = {"ipa": [], "entries": [{"pos": "Noun", "definitions": ["hello"]}], "actual_word": "bonjour"}
+        partial_wikt = {"status": "ok", "ipa": [], "entries": [{"pos": "Noun", "definitions": ["hello"]}], "actual_word": "bonjour"}
         with patch("define_cli.main.wiktionary.fetch", return_value=partial_wikt), \
-             patch("define_cli.main.reverso.fetch", return_value=None), \
+             patch("define_cli.main.reverso.fetch", return_value={"status": "not_found"}), \
              patch("sys.argv", ["define", "fr", "bonjour"]):
             main()
         out = capsys.readouterr().out
         assert "hello" in out
 
     def test_wikt_none_reverso_present(self, capsys):
-        with patch("define_cli.main.wiktionary.fetch", return_value=None), \
+        with patch("define_cli.main.wiktionary.fetch", return_value={"status": "not_found"}), \
              patch("define_cli.main.reverso.fetch", return_value=MOCK_REVERSO), \
              patch("sys.argv", ["define", "fr", "bonjour"]):
             main()
@@ -293,8 +296,8 @@ class TestPartialScrapeResults:
         assert "Bonjour, comment allez-vous" in out
 
     def test_both_none_shows_reinstall_hint(self, capsys):
-        with patch("define_cli.main.wiktionary.fetch", return_value=None), \
-             patch("define_cli.main.reverso.fetch", return_value=None), \
+        with patch("define_cli.main.wiktionary.fetch", return_value={"status": "not_found"}), \
+             patch("define_cli.main.reverso.fetch", return_value={"status": "not_found"}), \
              patch("sys.argv", ["define", "fr", "bonjour"]):
             main()
         out = capsys.readouterr().out
@@ -302,12 +305,11 @@ class TestPartialScrapeResults:
 
     def test_empty_examples_list(self, capsys):
         with patch("define_cli.main.wiktionary.fetch", return_value=MOCK_WIKT), \
-             patch("define_cli.main.reverso.fetch", return_value=None), \
+             patch("define_cli.main.reverso.fetch", return_value={"status": "not_found"}), \
              patch("sys.argv", ["define", "fr", "bonjour"]):
             main()
         out = capsys.readouterr().out
         assert "No examples found" in out
-
 
 class TestShellModeLoop:
     def test_shell_eof_exits_cleanly(self):
