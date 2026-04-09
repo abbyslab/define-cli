@@ -342,7 +342,7 @@ def fetch(word: str, lang: str) -> dict:
     for node in section_nodes:
         if node.name in ("h3", "h4"):
             heading = _heading_id(node)
-            if heading in POS_TAGS:
+            if heading:
                 current_pos = heading
         elif node.name == "div" and any(
             c in node.get("class", []) for c in ("mw-heading3", "mw-heading4")
@@ -350,7 +350,7 @@ def fetch(word: str, lang: str) -> dict:
             h = node.find(["h3", "h4"])
             if h:
                 heading = _heading_id(h)
-                if heading in POS_TAGS:
+                if heading:
                     current_pos = heading
 
         if node.name == "ol" and current_pos:

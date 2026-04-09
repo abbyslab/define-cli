@@ -205,8 +205,8 @@ class TestLooksLikeIPAAdversarial:
 
 
 class TestUnknownPOS:
-    def test_unknown_pos_heading_is_skipped(self):
-        """A POS heading not in POS_TAGS should produce no entries."""
+    def test_unknown_pos_heading_is_accepted(self):
+        """Any POS heading is now accepted — POS_TAGS is for styling only."""
         html = """<html><body>
             <div class="mw-heading mw-heading2"><h2 id="French">French</h2></div>
             <div class="mw-heading mw-heading3"><h3 id="Glyph_origin">Glyph origin</h3></div>
@@ -221,7 +221,8 @@ class TestUnknownPOS:
         with patch("define_cli.wiktionary.requests.get", side_effect=mock_get):
             result = wiktionary.fetch("quelque", "fr")
         assert result is not None
-        assert result["entries"] == []
+        assert result["entries"] != []
+        assert result["entries"][0]["pos"] == "Glyph_origin"
 
     def test_multiple_pos_blocks(self):
         """Multiple POS headings should each produce their own entry."""
