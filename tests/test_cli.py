@@ -53,6 +53,10 @@ class TestParser:
         assert args.no_defs is True
         assert args.no_examples is True
 
+    def test_duplicate_flag_is_harmless(self):
+        args = self.parser.parse_args(["fr", "bonjour", "--no-defs", "--no-defs"])
+        assert args.no_defs is True
+
 MOCK_WIKT = {
     "ipa": ["/bɔ̃.ʒuʁ/"],
     "entries": [
@@ -124,8 +128,57 @@ class TestMainIntegration:
              patch("sys.argv", ["define", "fr", "bonjour", "-e"]):
             main()
             call_kwargs = mock_reverso.call_args
-            # limit arg is positional index 2
             assert call_kwargs.args[2] is None or call_kwargs.kwargs.get("limit") is None
+
+    def test_extended_and_no_examples_combined(self):
+        with patch("define_cli.main.reverso.fetch") as mock_reverso, \
+             patch("define_cli.main.wiktionary.fetch", return_value=MOCK_WIKT), \
+             patch("sys.argv", ["define", "fr", "bonjour", "-e", "--no-examples"]):
+            main()
+            mock_reverso.assert_not_called()
+
+    def test_langs_with_extra_args_still_works(self, capsys):
+        with patch("sys.argv", ["define", "--langs", "fr"]):
+            try:
+                main()
+            except SystemExit:
+                pass
+        out = capsys.readouterr().out
+        assert "French" in out
+
+    def test_empty_word_exits(self):
+        with patch("sys.argv", ["define", "fr", ""]):
+            with pytest.raises(SystemExit):
+                main()
+
+    def test_render_empty_entries_shows_reinstall_hint(self, capsys):
+        empty_wikt = {"ipa": [], "entries": [], "actual_word": "xyz"}
+        with patch("define_cli.main.wiktionary.fetch", return_value=empty_wikt), \
+             patch("define_cli.main.reverso.fetch", return_value=None), \
+             patch("sys.argv", ["define", "fr", "xyz"]):
+            main()
+        out = capsys.readouterr().out
+        assert "pipx reinstall" in out
+
+    def test_unknown_flag_exits(self):
+        with patch("sys.argv", ["define", "fr", "bonjour", "--unknown-flag"]):
+            with pytest.raises(SystemExit) as exc:
+                main()
+            assert exc.value.code != 0
+
+    def test_shell_mode_without_lang_exits(self):
+        with patch("sys.argv", ["define", "--shell"]):
+            with pytest.raises(SystemExit):
+                main()
+
+
+class TestShellMode:
+    def test_shell_mode_invalid_lang_exits(self):
+        with patch("sys.argv", ["define", "--shell", "xx"]):
+            with pytest.raises(SystemExit) as exc:
+                main()
+            assert exc.value.code == 1
+
 
 class TestLangsFlag:
     def test_langs_flag_exits_cleanly(self):
@@ -168,6 +221,7 @@ class TestLangsFlag:
             with pytest.raises(SystemExit) as exc:
                 main()
             assert exc.value.code != 0
+
 
 class TestRenderSkippedSources:
     def _run(self, argv, wikt=None, reverso=None):
