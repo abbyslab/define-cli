@@ -44,10 +44,17 @@ LANG_SECTION_NAMES = {
 }
 
 POS_TAGS = {
+    # Core
     "Noun", "Verb", "Adjective", "Adverb", "Preposition",
     "Conjunction", "Interjection", "Pronoun", "Article",
     "Determiner", "Numeral", "Particle", "Suffix", "Prefix",
     "Participle",
+    # Extended
+    "Proper noun", "Phrase", "Idiom", "Proverb", "Abbreviation",
+    "Contraction", "Symbol", "Letter", "Punctuation mark",
+    "Number", "Romanization", "Han character", "Affix",
+    "Circumfix", "Infix", "Interfix", "Clitic",
+    "Postposition", "Prepositional phrase",
 }
 
 NATIVE_WIKT_LANGS = {
@@ -62,6 +69,144 @@ NATIVE_WIKT_LANGS = {
 LATIN_SCRIPT_LANGS = {
     "fr", "nl", "de", "es", "it", "pt", "ca", "cs", "da",
     "hu", "pl", "ro", "sk", "sv", "tr", "vi",
+}
+
+
+# ---------------------------------------------------------------------------
+# Native IPA extractors — one callable per language.
+# Each receives a BeautifulSoup object and returns list[str].
+# Breakage in one language is isolated to its own function.
+# ---------------------------------------------------------------------------
+
+def _ipa_span_classes(soup: BeautifulSoup, *classes: str) -> list[str]:
+    """Generic: collect IPA text from spans whose class is in `classes`."""
+    results: list[str] = []
+    for span in soup.find_all("span", class_=list(classes)):
+        text = span.get_text(strip=True)
+        if text and text not in results and _looks_like_ipa(text):
+            results.append(text)
+    return results
+
+
+def _ipa_native_default(soup: BeautifulSoup) -> list[str]:
+    return _ipa_span_classes(soup, "IPA")
+
+
+def _ipa_native_ipa_lower(soup: BeautifulSoup) -> list[str]:
+    return _ipa_span_classes(soup, "ipa")
+
+
+def _ipa_native_ipAtekst(soup: BeautifulSoup) -> list[str]:
+    return _ipa_span_classes(soup, "IPAtekst")
+
+
+def _ipa_native_fr(soup: BeautifulSoup) -> list[str]:
+    # French: span.API + span.audio-ipa, backslash delimiters \...\
+    return _ipa_span_classes(soup, "API", "audio-ipa")
+
+
+def _ipa_native_uk(soup: BeautifulSoup) -> list[str]:
+    # Ukrainian: IPA in <font> tags
+    results: list[str] = []
+    for font in soup.find_all("font"):
+        text = font.get_text(strip=True)
+        if text and text not in results and _looks_like_ipa(text):
+            results.append(text)
+    return results
+
+
+def _ipa_native_es(soup: BeautifulSoup) -> list[str]:
+    # Spanish: IPA in td inside table.pron-graf
+    results: list[str] = []
+    for table in soup.find_all("table", class_="pron-graf"):
+        for td in table.find_all("td"):
+            text = td.get_text(strip=True)
+            if _looks_like_ipa(text):
+                match = re.search(r'[/\[]([\w\s\u02b0-\u036f\u0250-\u02af]+)[/\]]', text)
+                if match:
+                    candidate = f"/{match.group(1)}/" if "/" in text else f"[{match.group(1)}]"
+                    if candidate not in results:
+                        results.append(candidate)
+                        break
+        if results:
+            break
+    return results
+
+
+def _ipa_native_el(soup: BeautifulSoup) -> list[str]:
+    # Greek: IPA in dd tags containing ΔΦΑ
+    results: list[str] = []
+    for dd in soup.find_all("dd"):
+        text = dd.get_text(strip=True)
+        if "ΔΦΑ" in text and _looks_like_ipa(text):
+            match = re.search(r'[/\[]([^/\]]+)[/\]]', text)
+            if match:
+                results.append(f"/{match.group(1)}/")
+                break
+    return results
+
+
+def _ipa_native_fa(soup: BeautifulSoup) -> list[str]:
+    # Persian: /word/ pattern in section text
+    results: list[str] = []
+    for section in soup.find_all("section"):
+        text = section.get_text(strip=True)
+        match = re.search(r'/([^/]+)/', text)
+        if match and _looks_like_ipa(f"/{match.group(1)}/"):
+            results.append(f"/{match.group(1)}/")
+            break
+    return results
+
+
+def _ipa_native_ro(soup: BeautifulSoup) -> list[str]:
+    # Romanian: IPA in section containing AFI:
+    results: list[str] = []
+    for section in soup.find_all("section"):
+        text = section.get_text(strip=True)
+        if "AFI" in text:
+            match = re.search(r"[/'\u02c8]([^/'\u02c8\s]+)", text)
+            if match:
+                full = re.search(r"/[^/]+/|'\S+'", text)
+                if full:
+                    results.append(full.group(0))
+                    break
+    return results
+
+
+# Dispatch table: lang code → list of extractor functions (tried in order)
+_NATIVE_IPA_EXTRACTORS: dict[str, list] = {
+    # span.IPA
+    "ar": [_ipa_native_default],
+    "ca": [_ipa_native_default],
+    "zh": [_ipa_native_default],
+    "cs": [_ipa_native_default],
+    "da": [_ipa_native_default],
+    "it": [_ipa_native_default],
+    "ja": [_ipa_native_default],
+    "ko": [_ipa_native_default],
+    "th": [_ipa_native_default],
+    "vi": [_ipa_native_default],
+    "hu": [_ipa_native_default],
+    "sk": [_ipa_native_default],
+    "tr": [_ipa_native_default],
+    # span.ipa (lowercase)
+    "pt": [_ipa_native_ipa_lower],
+    "pl": [_ipa_native_ipa_lower],
+    "de": [_ipa_native_ipa_lower],
+    "ru": [_ipa_native_ipa_lower],
+    # span.IPAtekst
+    "nl": [_ipa_native_ipAtekst],
+    "sv": [_ipa_native_ipAtekst],
+    # Language-specific
+    "fr": [_ipa_native_fr],
+    "uk": [_ipa_native_uk],
+    "es": [_ipa_native_es],
+    "el": [_ipa_native_el],
+    "fa": [_ipa_native_fa],
+    "ro": [_ipa_native_ro],
+    # No parseable IPA on native Wiktionary
+    "he": [],
+    "hi": [],
 }
 
 
@@ -112,20 +257,27 @@ def _fetch_soup(word: str) -> BeautifulSoup | None:
     except Exception:
         return None
 
+
 def _looks_like_ipa(text: str) -> bool:
     t = text.strip()
+    if not t:
+        return False
     # Has stress marks — accept regardless
     if re.search(r'[ˈˌ]', t):
         return True
-    # Has /.../ or [...] delimiters — accept if not obviously a non-IPA label
+    # Has /.../ or [...] or \...\ delimiters — accept unless known placeholder
     if re.search(r'^[/\[\\]', t) or re.search(r'[/\]\\]$', t):
-        # Reject known placeholder patterns
         if re.search(r'Prononciation|Pronunciation|\?', t):
             return False
         return True
     return False
 
+
 def _fetch_ipa_native(word: str, lang: str) -> list[str]:
+    extractors = _NATIVE_IPA_EXTRACTORS.get(lang, [])
+    if not extractors:
+        return []
+
     url = f"https://{lang}.wiktionary.org/wiki/{requests.utils.quote(word)}"
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
@@ -135,69 +287,13 @@ def _fetch_ipa_native(word: str, lang: str) -> list[str]:
         return []
 
     soup = BeautifulSoup(resp.text, "lxml")
-    ipa_list: list[str] = []
 
-    # Standard span-based IPA
-    for span in soup.find_all("span", class_=["IPA", "ipa", "IPAtekst", "API", "audio-ipa"]):
-        text = span.get_text(strip=True)
-        if text and text not in ipa_list and _looks_like_ipa(text):
-            ipa_list.append(text)
+    for extractor in extractors:
+        results = extractor(soup)
+        if results:
+            return results
+    return []
 
-    # Font-tag based IPA (Ukrainian)
-    if not ipa_list:
-        for font in soup.find_all("font"):
-            text = font.get_text(strip=True)
-            if text and text not in ipa_list and _looks_like_ipa(text):
-                ipa_list.append(text)
-
-    # Spanish: IPA in td inside pron-graf tables
-    if not ipa_list and lang == "es":
-        for table in soup.find_all("table", class_="pron-graf"):
-            for td in table.find_all("td"):
-                text = td.get_text(strip=True)
-                if _looks_like_ipa(text):
-                    # extract just the IPA part
-                    match = re.search(r'[/\[]([\w\s\u02b0-\u036f\u0250-\u02af]+)[/\]]', text)
-                    if match:
-                        candidate = f"/{match.group(1)}/" if "/" in text else f"[{match.group(1)}]"
-                        if candidate not in ipa_list:
-                            ipa_list.append(candidate)
-                            break
-            if ipa_list:
-                break
-
-    # Greek: IPA in dd tags containing ΔΦΑ:
-    if not ipa_list and lang == "el":
-        for dd in soup.find_all("dd"):
-            text = dd.get_text(strip=True)
-            if "ΔΦΑ" in text and _looks_like_ipa(text):
-                match = re.search(r'[/\[]([^/\]]+)[/\]]', text)
-                if match:
-                    ipa_list.append(f"/{match.group(1)}/")
-                    break
-
-    # Persian: IPA in section text as /word/
-    if not ipa_list and lang == "fa":
-        for section in soup.find_all("section"):
-            text = section.get_text(strip=True)
-            match = re.search(r'/([^/]+)/', text)
-            if match and _looks_like_ipa(f"/{match.group(1)}/"):
-                ipa_list.append(f"/{match.group(1)}/")
-                break
-
-    # Romanian: IPA in span inside section with AFI:
-    if not ipa_list and lang == "ro":
-        for section in soup.find_all("section"):
-            text = section.get_text(strip=True)
-            if "AFI" in text:
-                match = re.search(r"[/'\u02c8]([^/'\u02c8\s]+)", text)
-                if match:
-                    full = re.search(r"/[^/]+/|'\S+'", text)
-                    if full:
-                        ipa_list.append(full.group(0))
-                        break
-
-    return ipa_list
 
 def fetch(word: str, lang: str) -> dict | None:
     lang_name = LANG_SECTION_NAMES.get(lang)

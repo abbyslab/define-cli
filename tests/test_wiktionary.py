@@ -158,6 +158,15 @@ class TestPOSTags:
         """'Participle' must be in POS_TAGS so past participles get definitions."""
         assert "Participle" in wiktionary.POS_TAGS
 
+    def test_proper_noun_is_recognised(self):
+        assert "Proper noun" in wiktionary.POS_TAGS
+
+    def test_phrase_is_recognised(self):
+        assert "Phrase" in wiktionary.POS_TAGS
+
+    def test_idiom_is_recognised(self):
+        assert "Idiom" in wiktionary.POS_TAGS
+
 class TestLooksLikeIPA:
     def test_rejects_rhyme_notation(self):
         assert not wiktionary._looks_like_ipa("-oːpt")
@@ -223,8 +232,8 @@ class TestUnknownPOS:
         """A POS heading not in POS_TAGS should produce no entries."""
         html = """<html><body>
             <div class="mw-heading mw-heading2"><h2 id="French">French</h2></div>
-            <div class="mw-heading mw-heading3"><h3 id="Proverb">Proverb</h3></div>
-            <ol><li>some proverb definition</li></ol>
+            <div class="mw-heading mw-heading3"><h3 id="Glyph_origin">Glyph origin</h3></div>
+            <ol><li>some glyph origin text</li></ol>
         </body></html>"""
         from unittest.mock import patch, MagicMock
         def mock_get(url, **kwargs):
@@ -234,7 +243,6 @@ class TestUnknownPOS:
             return r
         with patch("define_cli.wiktionary.requests.get", side_effect=mock_get):
             result = wiktionary.fetch("quelque", "fr")
-        # Should return a result dict but with no entries
         assert result is not None
         assert result["entries"] == []
 
