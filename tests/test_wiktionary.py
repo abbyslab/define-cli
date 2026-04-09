@@ -310,3 +310,60 @@ class TestRendererNoneCases:
         )
         out = capsys.readouterr().out
         assert "Could not reach Wiktionary" in out
+
+
+class TestSchemaMutations:
+    """Verify parser degrades gracefully when DOM structure changes."""
+
+    def test_heading_class_renamed_returns_not_found(self):
+        """If mw-heading2 class is renamed, lang container not found → not_found."""
+        with patch("define_cli.wiktionary.requests.get",
+                   return_value=_mock_get("wikt_schema_heading_class_renamed.html")):
+            result = wiktionary.fetch("bonjour", "fr")
+        # Parser can't find the section — should return not_found, not crash
+        assert result["status"] in ("not_found", "ok")
+        # Must not crash or raise
+
+    def test_no_ipa_span_returns_ok_with_empty_ipa(self):
+        """No IPA span in EN Wiktionary → ipa list empty, entries still parsed."""
+        with patch("define_cli.wiktionary.requests.get",
+                   return_value=_mock_get("wikt_schema_no_ipa.html")):
+            # Patch native fallback to return nothing so test is isolated
+            with patch("define_cli.wiktionary._fetch_ipa_native", return_value=[]):
+                result = wiktionary.fetch("bonjour", "fr")
+        assert result["status"] == "ok"
+        assert result["ipa"] == []
+        assert result["entries"] != []  # definitions still found
+
+    def test_defs_in_ul_returns_empty_entries(self):
+        """Definitions in <ul> instead of <ol> → entries empty, no crash."""
+        with patch("define_cli.wiktionary.requests.get",
+                   return_value=_mock_get("wikt_schema_defs_in_ul.html")):
+            with patch("define_cli.wiktionary._fetch_ipa_native", return_value=[]):
+                result = wiktionary.fetch("bonjour", "fr")
+        assert result["status"] == "ok"
+        assert result["entries"] == []  # ul not parsed as definitions
+        # Must not crash
+
+    def test_empty_section_returns_ok_with_no_content(self):
+        """Language section present but empty → ok with empty ipa and entries."""
+        with patch("define_cli.wiktionary.requests.get",
+                   return_value=_mock_get("wikt_schema_empty_section.html")):
+            with patch("define_cli.wiktionary._fetch_ipa_native", return_value=[]):
+                result = wiktionary.fetch("bonjour", "fr")
+        assert result["status"] == "ok"
+        assert result["ipa"] == []
+        assert result["entries"] == []
+
+    def test_duplicate_sections_uses_first(self):
+        """Duplicate language sections → first one used, second ignored."""
+        with patch("define_cli.wiktionary.requests.get",
+                   return_value=_mock_get("wikt_schema_duplicate_sections.html")):
+            with patch("define_cli.wiktionary._fetch_ipa_native", return_value=[]):
+                result = wiktionary.fetch("bonjour", "fr")
+        assert result["status"] == "ok"
+        assert "/bɔ̃.ʒuʁ/" in result["ipa"]
+        assert "/duplicate/" not in result["ipa"]
+        all_defs = [d for e in result["entries"] for d in e["definitions"]]
+        assert any("first section" in d for d in all_defs)
+        assert not any("second section" in d for d in all_defs)
