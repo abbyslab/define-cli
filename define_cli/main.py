@@ -60,7 +60,13 @@ def shell_mode(lang: str) -> None:
             break
         if not word:
             continue
-        wikt_data = wiktionary.fetch(word, lang)
+
+        try:
+            wikt_data = wiktionary.fetch(word, lang)
+        except Exception:
+            console.print("  [dim]Error fetching data.[/dim]")
+            continue
+
         render.render(
             word=word,
             lang=lang,
@@ -138,6 +144,10 @@ def main() -> None:
 
     lang = args.lang.lower()
     word = args.word
+
+    if not word.strip():
+        parser.print_help()
+        sys.exit(1)
 
     if lang not in SUPPORTED_LANGS:
         print(

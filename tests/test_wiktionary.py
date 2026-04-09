@@ -7,6 +7,12 @@ from define_cli import wiktionary
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+MOCK_WIKT = {
+    "ipa": ["/bɔ̃.ʒuʁ/"],
+    "entries": [{"pos": "Interjection", "definitions": ["hello, good morning"]}],
+    "actual_word": "bonjour",
+}
+
 def _mock_get(fixture_file, status=200):
     """Return a mock requests.Response backed by a fixture file."""
     resp = MagicMock()
@@ -173,3 +179,131 @@ class TestLooksLikeIPA:
 
     def test_rejects_plain_word(self):
         assert not wiktionary._looks_like_ipa("loopt")
+
+class TestLooksLikeIPAAdversarial:
+    def test_single_char_slash_delimited(self):
+        assert wiktionary._looks_like_ipa("/a/")
+
+    def test_double_slash_empty(self):
+        # // has delimiters but no content — could go either way
+        # we just care it doesn't crash
+        result = wiktionary._looks_like_ipa("//")
+        assert isinstance(result, bool)
+
+    def test_slash_latin_word(self):
+        # /hello/ has delimiters but no IPA chars — currently accepted
+        # document current behaviour
+        assert wiktionary._looks_like_ipa("/hello/") is True
+
+    def test_repeated_stress_marks(self):
+        assert wiktionary._looks_like_ipa("ˈˈˈ") is True
+
+    def test_length_mark_only(self):
+        # aːb has length mark but no stress/delimiter
+        assert not wiktionary._looks_like_ipa("aːb")
+
+    def test_mixed_valid(self):
+        assert wiktionary._looks_like_ipa("/ˈbɔ̃.ʒuʁ/")
+
+    def test_empty_string(self):
+        assert not wiktionary._looks_like_ipa("")
+
+    def test_whitespace_only(self):
+        assert not wiktionary._looks_like_ipa("   ")
+
+    def test_number_string(self):
+        assert not wiktionary._looks_like_ipa("12345")
+
+    def test_punctuation_only(self):
+        assert not wiktionary._looks_like_ipa(".,;:!?")
+
+
+class TestUnknownPOS:
+    def test_unknown_pos_heading_is_skipped(self):
+        """A POS heading not in POS_TAGS should produce no entries."""
+        html = """<html><body>
+            <div class="mw-heading mw-heading2"><h2 id="French">French</h2></div>
+            <div class="mw-heading mw-heading3"><h3 id="Proverb">Proverb</h3></div>
+            <ol><li>some proverb definition</li></ol>
+        </body></html>"""
+        from unittest.mock import patch, MagicMock
+        def mock_get(url, **kwargs):
+            r = MagicMock()
+            r.status_code = 200
+            r.text = html
+            return r
+        with patch("define_cli.wiktionary.requests.get", side_effect=mock_get):
+            result = wiktionary.fetch("quelque", "fr")
+        # Should return a result dict but with no entries
+        assert result is not None
+        assert result["entries"] == []
+
+    def test_multiple_pos_blocks(self):
+        """Multiple POS headings should each produce their own entry."""
+        html = """<html><body>
+            <div class="mw-heading mw-heading2"><h2 id="French">French</h2></div>
+            <div class="mw-heading mw-heading3"><h3 id="Noun">Noun</h3></div>
+            <ol><li>a thing</li></ol>
+            <div class="mw-heading mw-heading3"><h3 id="Verb">Verb</h3></div>
+            <ol><li>to do something</li></ol>
+        </body></html>"""
+        from unittest.mock import patch, MagicMock
+        def mock_get(url, **kwargs):
+            r = MagicMock()
+            r.status_code = 200
+            r.text = html
+            return r
+        with patch("define_cli.wiktionary.requests.get", side_effect=mock_get):
+            result = wiktionary.fetch("mot", "fr")
+        assert result is not None
+        pos_list = [e["pos"] for e in result["entries"]]
+        assert "Noun" in pos_list
+        assert "Verb" in pos_list
+
+
+class TestRendererNoneCases:
+    """Test render() directly with edge-case inputs."""
+
+    def test_render_none_wikt_data(self, capsys):
+        from define_cli import render
+        render.render(
+            word="test",
+            lang="fr",
+            wikt_data=None,
+            reverso_data=None,
+        )
+        out = capsys.readouterr().out
+        assert "pipx reinstall" in out
+
+    def test_render_empty_ipa_list(self, capsys):
+        from define_cli import render
+        render.render(
+            word="test",
+            lang="fr",
+            wikt_data={"ipa": [], "entries": [{"pos": "Noun", "definitions": ["thing"]}], "actual_word": "test"},
+            reverso_data=None,
+        )
+        out = capsys.readouterr().out
+        assert "thing" in out
+
+    def test_render_none_reverso_shows_no_examples(self, capsys):
+        from define_cli import render
+        render.render(
+            word="test",
+            lang="fr",
+            wikt_data=MOCK_WIKT,
+            reverso_data=None,
+        )
+        out = capsys.readouterr().out
+        assert "No examples found" in out
+
+    def test_render_empty_reverso_list(self, capsys):
+        from define_cli import render
+        render.render(
+            word="test",
+            lang="fr",
+            wikt_data=MOCK_WIKT,
+            reverso_data=[],
+        )
+        out = capsys.readouterr().out
+        assert "No examples found" in out
