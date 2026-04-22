@@ -230,15 +230,16 @@ def _find_lang_container(soup: BeautifulSoup, lang_name: str) -> Tag | None:
     return None
 
 
-def _fetch_soup(word: str) -> BeautifulSoup | None:
+def _fetch_soup(word: str) -> tuple[BeautifulSoup | None, bool]:
+    """Returns (soup, network_ok). network_ok=False only on exception, not 404."""
     url = f"https://en.wiktionary.org/wiki/{requests.utils.quote(word)}"
     try:
         resp = requests.get(url, headers=HEADERS, timeout=10)
-        if resp.status_code != 200:
-            return None
-        return BeautifulSoup(resp.text, "lxml")
+        if resp.status_code == 200:
+            return BeautifulSoup(resp.text, "lxml"), True
+        return None, True  # 404 or other HTTP error — server reached, word not found
     except Exception:
-        return None
+        return None, False  # genuine network failure
 
 
 def _looks_like_ipa(text: str) -> bool:
@@ -299,10 +300,11 @@ def fetch(word: str, lang: str) -> dict:
     lang_container = None
 
     for variant in variants:
-        s = _fetch_soup(variant)
+        s, network_ok = _fetch_soup(variant)
+        if network_ok:
+            any_network_success = True
         if s is None:
             continue
-        any_network_success = True
         lc = _find_lang_container(s, lang_name)
         if lc is not None:
             soup = s

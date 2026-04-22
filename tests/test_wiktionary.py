@@ -258,11 +258,18 @@ class TestMissingWord:
             result = wiktionary.fetch("zzznonsense", "fr")
         assert result["status"] == "not_found"
 
-    def test_returns_network_error_on_http_error(self):
+    def test_returns_not_found_on_http_error(self):
         with patch("define_cli.wiktionary.requests.get",
                    return_value=_mock_get("wikt_missing.html", status=404)):
             result = wiktionary.fetch("zzznonsense", "fr")
-        assert result["status"] == "network_error"
+        assert result["status"] == "not_found"
+
+    def test_returns_not_found_on_404(self):
+        """404 from Wiktionary means word doesn't exist, not a network error."""
+        with patch("define_cli.wiktionary.requests.get",
+                   return_value=_mock_get("wikt_missing.html", status=404)):
+            result = wiktionary.fetch("vordert", "nl")
+        assert result["status"] == "not_found"
 
 class TestLangMismatch:
     def test_returns_not_found_for_wrong_lang(self):
